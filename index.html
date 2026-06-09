@@ -751,7 +751,8 @@
 </section>
 
 <script>
-  const API_BASE = "http://127.0.0.1:8000";
+  const localHosts = new Set(["localhost", "127.0.0.1"]);
+  const API_BASE = localHosts.has(window.location.hostname) ? "http://127.0.0.1:8000" : window.location.origin;
   let palace = null;
   let galleries = [];
   let activeGallery = null;
