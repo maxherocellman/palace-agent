@@ -489,7 +489,7 @@ def call_palace_llm(question: str, bundle: dict[str, Any], mode: str) -> str:
         os.getenv("CULTURE_AGENT_DASHSCOPE_API_KEY")
         or os.getenv("DASHSCOPE_API_KEY")
         or os.getenv("ALIYUN_API_KEY")
-        or "你的真实阿里云API_KEY写在这里" # 如果配置了环境变量仍然不行，直接把 sk-xxx 字符串写到这！
+
     )
     
     # 强制让 OpenAI 客户端在函数内部实例化，确保通路 100% 畅通
