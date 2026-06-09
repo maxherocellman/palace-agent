@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>故宫虚拟展馆 Agent</title>
+  <style>
+    :root {
+      --ink: #201814;
+      --muted: #786d61;
+      --ivory: #fff8ea;
+      --paper: #f2eadb;
+      --line: rgba(99, 68, 44, 0.18);
+      --red: #8e2f28;
+      --red-deep: #481c18;
+      --gold: #c49a55;
+      --jade: #365f54;
+      --shadow: 0 22px 70px rgba(31, 20, 14, 0.22);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+      background: #1d1511;
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .screen {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .gate {
+      position: relative;
+      place-items: center;
+      background:
+        linear-gradient(90deg, rgba(42, 17, 14, 0.95), rgba(42, 17, 14, 0.62)),
+        url("assets/palace-map-generated.png");
+      background-size: cover;
+      background-position: center;
+      color: var(--ivory);
+    }
+
+    .screen.gate.active {
+      display: grid;
+    }
+
+    .gate-panel {
+      width: min(520px, calc(100vw - 40px));
+      padding: 34px;
+      border: 1px solid rgba(255, 248, 234, 0.28);
+      border-radius: 18px;
+      background: rgba(50, 28, 23, 0.55);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      color: #ead1a8;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    h1, h2, h3, p {
+      margin-top: 0;
+    }
+
+    .gate h1 {
+      margin-bottom: 12px;
+      font-size: clamp(36px, 5vw, 64px);
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    .gate p {
+      margin-bottom: 24px;
+      line-height: 1.8;
+      color: #f3e4cb;
+    }
+
+    .primary-btn, .ghost-btn, .text-btn {
+      min-height: 42px;
+      border-radius: 999px;
+      padding: 0 18px;
+      font-weight: 700;
+    }
+
+    .primary-btn {
+      color: #fff8ea;
+      background: linear-gradient(135deg, var(--red), #b5653f);
+      box-shadow: 0 12px 30px rgba(116, 40, 30, 0.28);
+    }
+
+    .ghost-btn {
+      color: var(--red-deep);
+      background: rgba(255, 248, 234, 0.88);
+      border: 1px solid rgba(99, 68, 44, 0.14);
+    }
+
+    .text-btn {
+      color: var(--ivory);
+      background: rgba(255, 248, 234, 0.12);
+      border: 1px solid rgba(255, 248, 234, 0.22);
+    }
+
+    .map-screen {
+      position: relative;
+      background: #170f0c;
+      color: var(--ivory);
+    }
+
+    .map-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(20, 12, 8, 0.16), rgba(20, 12, 8, 0.48)),
+        url("assets/palace-map-generated.png");
+      background-size: cover;
+      background-position: center;
+      transform: scale(1.01);
+    }
+
+    .map-topbar {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      right: 28px;
+      z-index: 5;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .map-title {
+      max-width: 620px;
+      padding: 18px 20px;
+      border-radius: 18px;
+      background: rgba(41, 22, 17, 0.62);
+      border: 1px solid rgba(255, 248, 234, 0.2);
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .map-title h1 {
+      margin-bottom: 8px;
+      font-size: clamp(30px, 4vw, 52px);
+      line-height: 1.08;
+    }
+
+    .map-title p {
+      margin-bottom: 0;
+      color: #f3e5cd;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .map-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .map-pin {
+      position: absolute;
+      left: calc(var(--x) * 1%);
+      top: calc(var(--y) * 1%);
+      z-index: 4;
+      transform: translate(-50%, -50%);
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      color: white;
+      background: transparent;
+    }
+
+    .pin-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--red);
+      border: 3px solid #fff0d4;
+      box-shadow: 0 0 0 8px rgba(142, 47, 40, 0.18), 0 10px 24px rgba(0,0,0,0.28);
+    }
+
+    .pin-label {
+      min-width: 96px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: var(--red-deep);
+      background: rgba(255, 248, 234, 0.92);
+      border: 1px solid rgba(99, 68, 44, 0.18);
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.16);
+    }
+
+    .pin-label span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .map-hint {
+      position: absolute;
+      left: 28px;
+      bottom: 24px;
+      z-index: 5;
+      max-width: 560px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255, 248, 234, 0.88);
+      color: var(--red-deep);
+      border: 1px solid rgba(99, 68, 44, 0.18);
+      line-height: 1.65;
+      font-size: 13px;
+    }
+
+    .museum-page {
+      background: var(--paper);
+      overflow: auto;
+    }
+
+    .museum-nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      height: 68px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: rgba(255, 248, 234, 0.88);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-title strong {
+      display: block;
+      color: var(--red-deep);
+      font-size: 17px;
+    }
+
+    .nav-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .nav-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .gallery-layout {
+      min-height: calc(100vh - 68px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 0;
+    }
+
+    .gallery-main {
+      min-width: 0;
+      padding: 36px;
+    }
+
+    .gallery-hero {
+      min-height: 280px;
+      border-radius: 24px;
+      padding: 32px;
+      color: var(--ivory);
+      background:
+        linear-gradient(135deg, rgba(72, 28, 24, 0.92), rgba(54, 95, 84, 0.58)),
+        url("assets/palace-map-generated.png");
+      background-size: cover;
+      background-position: center;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .gallery-hero h1 {
+      margin-bottom: 8px;
+      font-size: clamp(34px, 4vw, 58px);
+      line-height: 1.05;
+    }
+
+    .gallery-hero p {
+      max-width: 760px;
+      margin-bottom: 0;
+      color: #f1ddc0;
+      line-height: 1.75;
+    }
+
+    .section-row {
+      margin-top: 28px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-end;
+    }
+
+    .section-row h2 {
+      margin-bottom: 5px;
+      color: var(--red-deep);
+    }
+
+    .section-row p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .artifact-carousel {
+      margin-top: 16px;
+      display: flex;
+      gap: 18px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      padding: 4px 4px 22px;
+    }
+
+    .artifact-tile {
+      flex: 0 0 290px;
+      min-height: 360px;
+      scroll-snap-align: start;
+      border-radius: 22px;
+      overflow: hidden;
+      background: var(--ivory);
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 38px rgba(45, 30, 20, 0.11);
+      text-align: left;
+      padding: 0;
+      color: var(--ink);
+    }
+
+    .artifact-visual {
+  height: 245px;
+  background: linear-gradient(135deg, #732e2a, #c09652);
+  background-image: url("assets/artifact-sprite-generated.png");
+  background-position: var(--artifact-x, 0%) var(--artifact-y, 0%);
+  background-size: 600% 300%;
+  position: relative;
+  overflow: hidden;
+}
+.artifact-visual::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 248, 234, .22);
+  pointer-events: none;
+}
+.artifact-visual::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 34%;
+  background: linear-gradient(0deg, rgba(38, 24, 16, .22), transparent);
+  pointer-events: none;
+}
+.artifact-tile:nth-child(2n) .artifact-visual {
+  background: linear-gradient(135deg, #31576e, #7e765c);
+  background-image: url("assets/artifact-sprite-generated.png");
+  background-position: var(--artifact-x, 0%) var(--artifact-y, 0%);
+  background-size: 600% 300%;
+}
+.artifact-tile:nth-child(3n) .artifact-visual {
+  background: linear-gradient(135deg, #365f54, #b78d45);
+  background-image: url("assets/artifact-sprite-generated.png");
+  background-position: var(--artifact-x, 0%) var(--artifact-y, 0%);
+  background-size: 600% 300%;
+}
+
+    .artifact-copy {
+      padding: 18px;
+    }
+
+    .artifact-copy strong {
+      display: block;
+      color: var(--red-deep);
+      font-size: 19px;
+      margin-bottom: 8px;
+    }
+
+    .artifact-copy span {
+      display: block;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .artifact-copy p {
+      margin-bottom: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .ai-panel {
+      position: sticky;
+      top: 68px;
+      height: calc(100vh - 68px);
+      border-left: 1px solid var(--line);
+      background: rgba(255, 248, 234, 0.8);
+      backdrop-filter: blur(14px);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .persona-card {
+      padding: 18px;
+      border-radius: 20px;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+    }
+
+    .avatar {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 12px;
+      border-radius: 50%;
+      color: white;
+      background: var(--red);
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .persona-card strong {
+      display: block;
+      color: var(--red-deep);
+      font-size: 19px;
+      margin-bottom: 5px;
+    }
+
+    .persona-card p {
+      margin-bottom: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .ai-output {
+      min-height: 190px;
+      padding: 18px;
+      border-radius: 20px;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+      overflow: auto;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      color: #352821;
+    }
+
+    .ai-form {
+      margin-top: auto;
+      display: grid;
+      gap: 10px;
+    }
+
+    .ai-form input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid rgba(99, 68, 44, 0.22);
+      border-radius: 14px;
+      padding: 0 14px;
+      background: #fffdf7;
+      color: var(--ink);
+    }
+
+    .ai-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 2px;
+    }
+
+    .detail-layout {
+      min-height: calc(100vh - 68px);
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(390px, 0.95fr);
+    }
+
+    .detail-visual {
+      position: relative;
+      min-height: calc(100vh - 68px);
+      display: grid;
+      place-items: center;
+      padding: 42px;
+      background:
+        radial-gradient(circle at 50% 45%, rgba(255,248,234,0.2), rgba(72,28,24,0.78)),
+        linear-gradient(135deg, #57231f, #a7773f);
+      color: var(--ivory);
+    }
+
+    .artifact-object {
+      width: min(520px, 70vw);
+      aspect-ratio: 1 / 1;
+      display: grid;
+      place-items: center;
+      padding: 42px;
+      border-radius: 42px;
+      text-align: center;
+      background: rgba(255, 248, 234, 0.12);
+      border: 1px solid rgba(255, 248, 234, 0.25);
+      box-shadow: var(--shadow);
+      font-size: clamp(28px, 4vw, 52px);
+      line-height: 1.25;
+      font-weight: 900;
+    }
+
+    .detail-copy {
+      padding: 38px;
+      overflow: auto;
+      background: var(--paper);
+    }
+
+    .detail-copy h1 {
+      color: var(--red-deep);
+      font-size: clamp(34px, 4vw, 58px);
+      line-height: 1.08;
+      margin-bottom: 10px;
+    }
+
+    .meta {
+      color: var(--gold);
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .detail-copy p {
+      line-height: 1.82;
+      color: var(--muted);
+    }
+
+    .source-list {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 248, 234, 0.75);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .detail-ai {
+      margin-top: 20px;
+      padding: 18px;
+      border-radius: 20px;
+      background: #fffaf0;
+      border: 1px solid var(--line);
+    }
+
+    .detail-ai h3 {
+      color: var(--red-deep);
+      margin-bottom: 12px;
+    }
+
+    .detail-ai .ai-output {
+      margin-bottom: 12px;
+      min-height: 140px;
+      background: #fffdf8;
+    }
+
+    @media (max-width: 1100px) {
+      body { overflow: auto; }
+      .screen { height: auto; min-height: 100vh; overflow: visible; }
+      .map-screen { height: 100vh; overflow: hidden; }
+      .gallery-layout, .detail-layout {
+        grid-template-columns: 1fr;
+      }
+      .ai-panel {
+        position: relative;
+        top: 0;
+        height: auto;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+      .detail-visual {
+        min-height: 54vh;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .map-topbar {
+        left: 16px;
+        right: 16px;
+        top: 16px;
+        flex-direction: column;
+      }
+      .map-pin {
+        transform: translate(-50%, -50%) scale(0.86);
+      }
+      .map-hint {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+      }
+      .museum-nav {
+        padding: 0 14px;
+      }
+      .gallery-main, .detail-copy {
+        padding: 20px;
+      }
+      .artifact-tile {
+        flex-basis: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+<section id="gateScreen" class="screen gate active">
+  <div class="gate-panel">
+    <div class="eyebrow">Palace Museum Agent</div>
+    <h1>故宫虚拟展馆</h1>
+    <p>登录后进入全屏宫城地图。选择展馆、滑动文物、进入详情，并向对应历史人物提问。</p>
+    <button type="button" class="primary-btn" id="enterBtn">观众登录并进入</button>
+  </div>
+</section>
+
+<section id="mapScreen" class="screen map-screen">
+  <div class="map-bg"></div>
+  <div class="map-topbar">
+    <div class="map-title">
+      <div class="eyebrow">全屏导览地图</div>
+      <h1 id="mapTitle">故宫虚拟展馆</h1>
+      <p id="mapOpening">点击地图中的展馆入口，进入展馆内部。</p>
+    </div>
+    <div class="map-actions">
+      <button type="button" class="text-btn" id="backGateBtn">退出</button>
+    </div>
+  </div>
+  <div id="pinLayer"></div>
+  <div class="map-hint" id="routeNote">地图为教学 Demo 示意，不是精确测绘图。</div>
+</section>
+
+<section id="galleryScreen" class="screen museum-page">
+  <nav class="museum-nav">
+    <div class="nav-title">
+      <strong id="galleryNavTitle">展馆</strong>
+      <span id="galleryNavSub">选择文物进入详情，或直接向讲解者提问</span>
+    </div>
+    <div class="nav-actions">
+      <button type="button" class="ghost-btn" id="galleryBackMapBtn">返回地图</button>
+    </div>
+  </nav>
+  <div class="gallery-layout">
+    <main class="gallery-main">
+      <section class="gallery-hero">
+        <div class="eyebrow" id="galleryZone">展馆位置</div>
+        <h1 id="galleryTitle">展馆</h1>
+        <p id="gallerySummary">展馆介绍</p>
+      </section>
+      <div class="section-row">
+        <div>
+          <h2>馆藏文物</h2>
+          <p>横向滑动选择文物，点击卡片进入详情。</p>
+        </div>
+        <button type="button" class="ghost-btn" id="galleryIntroBtn">请讲解本馆</button>
+      </div>
+      <div class="artifact-carousel" id="artifactCarousel"></div>
+    </main>
+    <aside class="ai-panel">
+      <div class="persona-card">
+        <div class="avatar" id="galleryAvatar">宫</div>
+        <strong id="galleryPersonaName">讲解者</strong>
+        <p id="galleryPersonaRole">进入展馆后出现对应历史人物。</p>
+      </div>
+      <div class="ai-output" id="galleryAiOutput">可以在展馆内直接提问，例如：这个展馆最值得先看什么？</div>
+      <audio id="galleryAudio" controls></audio>
+      <div class="ai-form">
+        <input id="galleryQuestion" placeholder="向本馆讲解者提问">
+        <div class="ai-buttons">
+          <button type="button" class="primary-btn" id="galleryAskBtn">提问</button>
+          <button type="button" class="ghost-btn" id="galleryVoiceBtn">语音</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<section id="detailScreen" class="screen museum-page">
+  <nav class="museum-nav">
+    <div class="nav-title">
+      <strong id="detailNavTitle">文物详情</strong>
+      <span id="detailNavSub">详情页同样可以向当前历史人物提问</span>
+    </div>
+    <div class="nav-actions">
+      <button type="button" class="ghost-btn" id="detailBackGalleryBtn">返回展馆</button>
+      <button type="button" class="ghost-btn" id="detailBackMapBtn">返回地图</button>
+    </div>
+  </nav>
+  <div class="detail-layout">
+    <div class="detail-visual">
+      <div class="artifact-object" id="detailVisual">文物</div>
+    </div>
+    <main class="detail-copy">
+      <div class="eyebrow" id="detailGallery">展馆</div>
+      <h1 id="detailTitle">文物名称</h1>
+      <div class="meta" id="detailPeriod">时代</div>
+      <p id="detailDescription">文物说明</p>
+      <div class="source-list" id="detailSource">出处</div>
+      <div class="detail-ai">
+        <h3 id="detailPersona">向讲解者提问</h3>
+        <div class="ai-output" id="detailAiOutput">可以问：这件文物为什么重要？它和当时的宫廷生活有什么关系？</div>
+        <audio id="detailAudio" controls></audio>
+        <div class="ai-form">
+          <input id="detailQuestion" placeholder="围绕当前文物提问">
+          <div class="ai-buttons">
+            <button type="button" class="primary-btn" id="detailIntroBtn">讲解文物</button>
+            <button type="button" class="primary-btn" id="detailAskBtn">提问</button>
+            <button type="button" class="ghost-btn" id="detailVoiceBtn">语音</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<script>
+  const API_BASE = "http://127.0.0.1:8000";
+  let palace = null;
+  let galleries = [];
+  let activeGallery = null;
+  let activeArtifact = null;
+  let activeVoiceTarget = null;
+  let recognition = null;
+  let transcript = "";
+
+  const $ = (id) => document.getElementById(id);
+  const screens = ["gateScreen", "mapScreen", "galleryScreen", "detailScreen"];
+  
+  const spriteColumns = 6;
+  const spriteRows = 3;
+  let artifactOrder = [];
+
+function artifactSpriteVars(artifact) {
+  const index = Math.max(0, artifactOrder.indexOf(artifact.id));
+  const col = index % spriteColumns;
+  const row = Math.floor(index / spriteColumns) % spriteRows;
+  const x = spriteColumns === 1 ? 0 : (col / (spriteColumns - 1)) * 100;
+  const y = spriteRows === 1 ? 0 : (row / (spriteRows - 1)) * 100;
+  return `--artifact-x: ${x}%; --artifact-y: ${y}%;`;
+}
+  function showScreen(id) {
+    screens.forEach((screenId) => $(screenId).classList.toggle("active", screenId === id));
+  }
+
+  function setBusy(scope, busy, text) {
+    const output = scope === "detail" ? $("detailAiOutput") : $("galleryAiOutput");
+    if (text) output.innerText = text;
+    ["galleryAskBtn", "galleryIntroBtn", "detailAskBtn", "detailIntroBtn"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = busy;
+    });
+  }
+
+  async function loadPalace() {
+    const res = await fetch(`${API_BASE}/api/palace`);
+    palace = await res.json();
+    galleries = palace.galleries;
+    artifactOrder = galleries.flatMap((g) => g.artifacts.map((a) => a.id));
+    $("mapTitle").innerText = palace.museum.title;
+    $("mapOpening").innerText = palace.museum.opening;
+    $("routeNote").innerText = palace.museum.route_note;
+    renderPins();
+    routeInitialView();
+  }
+
+  function routeInitialView() {
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get("view");
+    const galleryId = params.get("gallery") || galleries[0]?.id;
+    const artifactId = params.get("artifact");
+    if (view === "map") {
+      showScreen("mapScreen");
+      return;
+    }
+    if (view === "gallery") {
+      openGallery(galleryId);
+      return;
+    }
+    if (view === "detail") {
+      openGallery(galleryId);
+      if (artifactId) openDetail(artifactId);
+    }
+  }
+
+  function renderPins() {
+    const layer = $("pinLayer");
+    layer.innerHTML = "";
+    galleries.forEach((gallery) => {
+      const pin = document.createElement("div"); // 强改 div，消灭隐式提交
+      pin.className = "map-pin";
+      pin.style.setProperty("--x", gallery.x);
+      pin.style.setProperty("--y", gallery.y);
+      pin.innerHTML = `<span class="pin-dot"></span><span class="pin-label">${gallery.name}<span>${gallery.zone}</span></span>`;
+      pin.onclick = (e) => { e.preventDefault(); openGallery(gallery.id); };
+      layer.appendChild(pin);
+    });
+  }
+
+  function openGallery(galleryId) {
+    activeGallery = galleries.find((gallery) => gallery.id === galleryId) || galleries[0];
+    activeArtifact = activeGallery.artifacts[0];
+    $("galleryNavTitle").innerText = activeGallery.name;
+    $("galleryZone").innerText = activeGallery.zone;
+    $("galleryTitle").innerText = activeGallery.name;
+    $("gallerySummary").innerText = activeGallery.summary;
+    $("galleryAvatar").innerText = activeGallery.persona.name.slice(0, 1);
+    $("galleryPersonaName").innerText = activeGallery.persona.name;
+    $("galleryPersonaRole").innerText = `${activeGallery.persona.role}。${activeGallery.persona.voice}`;
+    $("galleryQuestion").value = `请介绍${activeGallery.name}最值得看的文物`;
+    $("galleryAiOutput").innerText = "可以在展馆内直接提问，例如：这个展馆最值得先看什么？";
+    $("galleryAudio").removeAttribute("src");
+    renderArtifacts();
+    showScreen("galleryScreen");
+  }
+
+  function renderArtifacts() {
+    const carousel = $("artifactCarousel");
+    carousel.innerHTML = "";
+    activeGallery.artifacts.forEach((artifact) => {
+      // === 【核心修复一：全量将卡片转化为安全的 div，杜绝跳转真凶】 ===
+      const tile = document.createElement("div");
+      tile.className = "artifact-tile";
+      tile.innerHTML = `
+      <div class="artifact-visual" style="${artifactSpriteVars(artifact)}" role="img" aria-label="${artifact.title}：${artifact.image_hint}"></div> 
+      <div class="artifact-copy">
+          <strong>${artifact.title}</strong>
+          <span>${artifact.period}</span>
+          <p>${artifact.description}</p>
+        </div>
+      `;
+      tile.onclick = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        openDetail(artifact.id);
+      };
+      carousel.appendChild(tile);
+    });
+  }
+
+  function openDetail(artifactId) {
+    activeArtifact = activeGallery.artifacts.find((artifact) => artifact.id === artifactId) || activeGallery.artifacts[0];
+    $("detailNavTitle").innerText = activeArtifact.title;
+    $("detailGallery").innerText = activeGallery.name;
+    $("detailTitle").innerText = activeArtifact.title;
+    $("detailPeriod").innerText = activeArtifact.period;
+    $("detailDescription").innerText = activeArtifact.description;
+    const detailVisual = $("detailVisual"); detailVisual.innerText = ""; detailVisual.style.cssText = artifactSpriteVars(activeArtifact); detailVisual.setAttribute("aria-label", `${activeArtifact.title}：${activeArtifact.image_hint}`); detailVisual.setAttribute("role", "img");
+    $("detailSource").innerText = `出处：${activeArtifact.source}`;
+    $("detailPersona").innerText = `向${activeGallery.persona.name}提问`;
+    $("detailQuestion").value = `这件${activeArtifact.title}为什么重要？`;
+    $("detailAiOutput").innerText = "可以问：这件文物为什么重要？它和当时的宫廷生活有什么关系？";
+    $("detailAudio").removeAttribute("src");
+    showScreen("detailScreen");
+  }
+
+  async function ask(scope, mode = "chat") {
+    if (window.event) window.event.preventDefault();
+    if (!activeGallery) return false;
+    if (!activeArtifact) activeArtifact = activeGallery.artifacts[0];
+    
+    const questionInput = scope === "detail" ? $("detailQuestion") : $("galleryQuestion");
+    const question = mode === "intro" ? `请讲解${activeArtifact.title}` : questionInput.value;
+    const output = scope === "detail" ? $("detailAiOutput") : $("galleryAiOutput");
+    const audio = scope === "detail" ? $("detailAudio") : $("galleryAudio");
+    
+    setBusy(scope, true, "讲解者正在思索理据...");
+    audio.pause();
+    try {
+      const res = await fetch(`${API_BASE}/api/palace/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          gallery_id: activeGallery.id,
+          artifact_id: activeArtifact.id,
+          mode
+        })
+      });
+      const data = await res.json();
+      if (data.status !== "success") throw new Error(data.message || "生成失败");
+      output.innerText = data.speech_text;
+      audio.src = data.audio_url + "?t=" + Date.now();
+      audio.load();
+      setTimeout(() => {
+        audio.play().catch(() => {
+          output.innerText = data.speech_text;
+        });
+      }, 100);
+    } catch (err) {
+      output.innerText = "抱歉，系统暂时开小差了，请确保本地后端已正常拉起。";
+    } finally {
+      setBusy(scope, false);
+    }
+    return false;
+  }
+
+  function setupVoice() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      $("galleryVoiceBtn").disabled = true;
+      $("detailVoiceBtn").disabled = true;
+      return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN";
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      transcript = event.results[0][0].transcript;
+      const input = activeVoiceTarget === "detail" ? $("detailQuestion") : $("galleryQuestion");
+      input.value = transcript;
+    };
+    recognition.onend = () => {
+      if (transcript) ask(activeVoiceTarget || "gallery");
+    };
+  }
+
+  // === 【核心修复二：强力防御拦截，全量剥夺浏览器的自动提交刷新权】 ===
+  $("enterBtn").onclick = (e) => { if (e) e.preventDefault(); showScreen("mapScreen"); return false; };
+  $("backGateBtn").onclick = (e) => { if (e) e.preventDefault(); showScreen("gateScreen"); return false; };
+  $("galleryBackMapBtn").onclick = (e) => { if (e) e.preventDefault(); showScreen("mapScreen"); return false; };
+  $("detailBackGalleryBtn").onclick = (e) => { if (e) e.preventDefault(); showScreen("galleryScreen"); return false; };
+  $("detailBackMapBtn").onclick = (e) => { if (e) e.preventDefault(); showScreen("mapScreen"); return false; };
+  
+  $("galleryIntroBtn").onclick = (e) => { if (e) e.preventDefault(); ask("gallery", "intro"); return false; };
+  $("galleryAskBtn").onclick = (e) => { if (e) e.preventDefault(); ask("gallery", "chat"); return false; };
+  $("detailIntroBtn").onclick = (e) => { if (e) e.preventDefault(); ask("detail", "intro"); return false; };
+  $("detailAskBtn").onclick = (e) => { if (e) e.preventDefault(); ask("detail", "chat"); return false; };
+  
+  // 斩断输入框敲击回车的隐式提交刷新
+  $("galleryQuestion").onkeydown = (e) => { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); ask("gallery", "chat"); return false; } };
+  $("detailQuestion").onkeydown = (e) => { if (e.key === "Enter" || e.keyCode === 13) { e.preventDefault(); ask("detail", "chat"); return false; } };
+
+  $("galleryVoiceBtn").onclick = (e) => {
+    if (e) e.preventDefault();
+    activeVoiceTarget = "gallery";
+    transcript = "";
+    recognition && recognition.start();
+    return false;
+  };
+  $("detailVoiceBtn").onclick = (e) => {
+    if (e) e.preventDefault();
+    activeVoiceTarget = "detail";
+    transcript = "";
+    recognition && recognition.start();
+    return false;
+  };
+
+  setupVoice();
+  loadPalace().catch(() => {
+    $("mapOpening").innerText = "无法连接后端，请确认 app.py 已启动。";
+  });
+</script>
+</body>
+</html>
